@@ -1,0 +1,485 @@
+---
+title: '**Modelamiento Estadístico y Sistemas Recomendadores: Foro 3**'
+author: '*Patricio Águila Márquez*'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## \textcolor{blue}{Instrucciones}
+
+Considere los datos del archivo ‘wholesale.csv’, que contienen información de 440 clientes de un distribuidor mayorista. La base de datos contiene información sobre el gasto anual de cada cliente en productos de las siguientes categorías: frescos (Fresh), lácteos (Milk), comestibles (Grocery), congelados (Frozen), detergentes/papel (Detergents_Paper) y rotisería (Delicassen).
+
+En base a este conjunto de datos, realice las siguientes actividades:
+
+**\textcolor{blue}{Actividades preliminares:}**
+
+1. Cargue el conjunto de datos en la sesión de trabajo de `R` usando la función `read.table` . Utilizando la función **summary** determine el producto que generó la máxima venta, y el producto que mayor ingreso genera en promedio. 
+
+```{r, message=FALSE, echo=FALSE}
+# Carga de los 'packages' necesarios para el análisis de los datos
+  library(cluster)
+  library(scales)
+  library(ggplot2)
+  library(ggdendro)
+  library(factoextra)
+  library(dendextend)
+  library(gridExtra)
+  library(clValid)
+```
+
+```{r, echo=FALSE}
+# Creación del dataset con los datos originales
+  wholesale_original <- read.csv("../04 Foro 3/wholesale.csv")
+# Creación del dataset con los datos escalados
+  wholesale_scaled <- as.data.frame(scale(wholesale_original))
+```
+
+*Principales estadísticos de los datos originales*: 
+```{r, echo=FALSE}
+# Principales estadísticos
+  summary(wholesale_original)
+```
+
+* *La categoría que generó la mayor venta es 'Fresh', con $112.151.*
+* *La categoría que mayor ingreso genera en promedio también es 'Fresh', con media de $12.000.*
+
+\newpage
+
+Luego, considere y responda:
+
+    a. ¿Son similares las distribuciones de venta de cada producto?
+*Resp: al utilizar los **datos originales**, se observa que la distribución de las ventas en las distintas categorías son similares, concentrando la mayoría de los ingresos al principio de cada histograma.*
+
+```{r, fig.width=7, fig.height=4, echo=FALSE}
+par(mfrow=c(2,3))
+
+# Histograma variable Fresh
+  hist(wholesale_original$Fresh, main = "Histograma 'Fresh'", xlab = "Fresh", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+
+# Histograma variable Milk
+  hist(wholesale_original$Milk, main = "Histograma 'Milk'", xlab = "Milk", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+  
+# Histograma variable Grocery
+  hist(wholesale_original$Grocery, main = "Histograma 'Grocery'", xlab = "Grocery", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+  
+# Histograma variable Frozen
+  hist(wholesale_original$Frozen, main = "Histograma 'Frozen'", xlab = "Frozen", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+  
+# Histograma variable Detergents_Paper
+  hist(wholesale_original$Detergents_Paper, main = "Histograma 'Detergents_Paper'", xlab = "Detergents_Paper", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+  
+# Histograma variable Delicassen
+  hist(wholesale_original$Delicassen, main = "Histograma 'Delicassen'", xlab = "Delicassen", cex.axis=0.8, ylim = c(0, 500), xlim = c(0,120000))
+  abline(h=seq(0,500,100), v = seq(0,120000,20000), lty="dotted", col = "grey")
+```
+
+    b. ¿Cuál es la relación entre las medias y las desviaciones estándar de cada variable? 
+    Interprete este resultado.
+    
+*Resp: la relación entre la media y la desviación estándar nos indica qué tan dispersos se encuentran los datos. Mientras menos distancia hay entre la media y la desviación estándar, existe menos variabilidad en los datos. Por ejemplo, los valores de la variable 'Fresh' están más cerca de la media que aquellos de las otras categorías, lo que implica que en este punto hay una mayor densidad de datos.*
+
+```{r, echo=FALSE}
+# Transformar a df el cálculo de mean y sd las variables del dataset original
+medi <- as.data.frame(round(apply(wholesale_original, 2, mean),0))
+colnames(medi)[1] <- "Mean"
+desv <-  as.data.frame(round(apply(wholesale_original, 2, sd),0))
+colnames(desv)[1] <- "Sd"
+#medi.z <- as.data.frame((apply(wholesale_scaled, 2, mean)))
+#colnames(medi.z)[1] <- "Mean.scaled"
+#desv.z <-  as.data.frame((apply(wholesale_scaled, 2, sd)))
+#colnames(desv.z)[1] <- "Sd.scaled"
+
+
+# Obtener como nombre de columna el índice de cada fila
+medi1 <- cbind(names = rownames(medi), medi)
+desv1 <- cbind(names = rownames(desv), desv)
+#medi1.z <- cbind(names = rownames(medi.z), medi.z)
+#desv1.z <- cbind(names = rownames(desv.z), desv.z)
+
+# Juntar dos data frames y unirlos por el nombre de una columna en común
+medi_desv <- merge(x=medi1, y=desv1, by="names")
+#medi.z_desv.z <- merge(x=medi1.z, y=desv1.z, by="names")
+#ori_sca <- merge(x=medi_desv, y=medi.z_desv.z, by="names")
+#ori_sca
+
+# Renombrar una columna
+colnames(medi_desv)[1] <- "Category"
+
+# Remover columnas no utilizadas del nuevo data frame
+medi_desv$names.x <- NULL
+medi_desv$names.y <- NULL
+
+# Ordenar df según valor de una columna, de mayor a menor
+df_mean_sd <- medi_desv[order(-medi_desv$Mean),]
+
+# Eliminar el nombre de las filas
+rownames(df_mean_sd) <- NULL
+
+# df resultante
+df_mean_sd
+
+# Eliminar tablas intermedias
+rm(list = c("desv", "desv1", "medi", "medi1", "medi_desv"))
+
+```
+\newpage
+
+    c. Adicionalmente, investigue qué producto representa la mayor parte de las ventas, y qué 
+    producto la menor. Comente e interprete estos resultados.
+
+*Resp: la categoría de productos 'Fresh' representa la mayor parte de las ventas (36,12%), mientras que 'Delicassen' tiene la menor participación (4,59%)*
+
+```{r, echo=FALSE}
+suma_cat <- apply(wholesale_original, 2, sum)
+porc_cat <- suma_cat/sum(suma_cat)
+
+# Transformar a df el cálculo de mean y sd las variables del dataset original
+suma_cat <- as.data.frame(suma_cat)
+colnames(suma_cat)[1] <- "Suma"
+porc_cat <-  as.data.frame(porc_cat)
+colnames(porc_cat)[1] <- "Porcentaje"
+
+# Obtener como nombre de columna el índice de cada fila
+suma_cat <- cbind(names = rownames(suma_cat), suma_cat)
+porc_cat <- cbind(names = rownames(porc_cat), porc_cat)
+
+# Juntar dos data frames y unirlos por el nombre de una columna en común
+df_suma_cat <- merge(x=suma_cat, y=porc_cat, by="names")
+
+# Renombrar una columna
+colnames(df_suma_cat)[1] <- "Category"
+
+
+# Ordenar df según valor de una columna, de mayor a menor
+df_suma_cat <- df_suma_cat[order(-df_suma_cat$Porcentaje),]
+df_suma_cat$Porcentaje <- round(df_suma_cat$Porcentaje*100,2) 
+
+# Eliminar el nombre de las filas
+rownames(df_suma_cat) <- NULL
+
+# df resultante
+df_suma_cat 
+
+# Eliminar tablas intermedias
+rm(list = c("suma_cat", "porc_cat"))
+  
+```
+
+
+2. En lo que sigue, haremos análisis de conglomerados sobre los datos. ¿Qué utilidad podría tener este tipo de análisis desde el punto de vista del negocio para el distribuidor mayorista? Responda en el Foro dando ejemplos concretos.
+
+* *Resp: el análisis de conglomerados serviría para segmentar a los clientes en base al monto y las categorías de productos comprados. Se podría realizar un análisis estratégico para determinar la conveniencia de conservar un cliente, o bien, deshacerse de él.*
+
+3. Normalice los datos utilizando la función **scale**. Comente sobre el posible beneficio de realizar este pre-procesamiento en análisis de conglomerados.
+
+* *Resp: el escalado de los datos ayuda a evitar que los atributos en rangos numéricos mayores dominen a aquellos en rangos numéricos más pequeños. Sirve también para colocar en una misma escala los valores atípicos u outliers de todas las variables.*
+
+*Principales estadísticos de los datos normalizados*:
+```{r, echo=FALSE}
+summary(wholesale_scaled)
+```
+
+```{r, fig.width=7, fig.height=4, echo=FALSE, include=FALSE}
+par(mfrow=c(2,3))
+# Histogramas escalados
+# Histograma variable Fresh
+  hist(wholesale_scaled$Fresh, main = "Histograma 'Fresh'", xlab = "Fresh", 
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+
+# Histograma variable Milk
+  hist(wholesale_scaled$Milk, main = "Histograma 'Milk'", xlab = "Milk", 
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+  
+# Histograma variable Grocery
+  hist(wholesale_scaled$Grocery, main = "Histograma 'Grocery'", xlab = "Grocery",
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+  
+# Histograma variable Frozen
+  hist(wholesale_scaled$Frozen, main = "Histograma 'Frozen'", xlab = "Frozen", 
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+  
+# Histograma variable Detergents_Paper
+  hist(wholesale_scaled$Detergents_Paper, main = "Histograma 'Detergents_Paper'", xlab = "Detergents_Paper", 
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+  
+# Histograma variable Delicassen
+  hist(wholesale_scaled$Delicassen, main = "Histograma 'Delicassen'", xlab = "Delicassen", 
+       cex.axis=0.8, ylim = c(0, 400), xlim = c(-5,15))
+  abline(h=seq(0,400,100), v = seq(-5,5,15), lty="dotted", col = "grey")
+  
+summary(wholesale_scaled)
+```
+
+\newpage
+*Visualización de datos atípicos (puntos más allá de los bigotes del 'boxplot'):*
+
+```{r, echo=FALSE, fig.width=7, fig.height=4}
+par(mfrow=c(2,3))
+
+# Boxblot variable Fresh
+boxplot(wholesale_scaled$Fresh, main = "Boxplot variable \n 'Fresh'", ylab = "Ventas", cex.axis=0.7)
+
+# Boxblot variable Milk
+boxplot(wholesale_scaled$Milk, main = "Boxplot variable \n 'Milk'", ylab = "Ventas", cex.axis=0.7)
+
+# Boxblot variable Grocery
+boxplot(wholesale_scaled$Grocery, main = "Boxplot variable \n 'Grocery'", ylab = "Ventas", cex.axis=0.7)
+
+# Boxblot variable Frozen
+boxplot(wholesale_scaled$Frozen, main = "Boxplot variable \n 'Frozen'", ylab = "Ventas", cex.axis=0.7)
+
+# Boxblot variable Detergents_Paper
+boxplot(wholesale_scaled$Detergents_Paper, main = "Boxplot variable \n 'Detergents_Paper'", ylab = "Ventas", cex.axis=0.7)
+
+# Boxblot variable Delicassen
+boxplot(wholesale_scaled$Delicassen, main = "Boxplot variable \n 'Delicassen'", ylab = "Ventas", cex.axis=0.7)
+```
+
+\newpage
+**\textcolor{blue}{Conglomerados por k-medoids}**
+
+4. Haciendo uso de la función `pam()` , incluida en la librería **cluster**, construya *k* conglomerados utilizando el método de *k-medoids*, para valores del parámetro *k* entre 2 y 10, y calcule el ancho de silueta promedio para cada valor de dicho parámetro. En base al ancho de la silueta, determine el número óptimo de conglomerados para agrupar los datos. Investigue la salida de la función `pam()` para poder obtener la silueta promedio. En el siguiente enlace encontrará información relevante sobre ella: https://en.wikipedia.org/wiki/Silhouette_(clustering). Repita el procedimiento para los datos normalizados. Comente sus resultados en el foro.
+
+* *Resp: el número óptimo de clusters es para K=2, valor para el cual se obtiene el máximo ancho de silueta [1]*
+
+```{r, fig.width=7, fig.height=3}
+
+fviz_nbclust(wholesale_original, pam, method = "silhouette")+
+  labs(title = "Silueta promedio para datos originales")
+
+fviz_nbclust(wholesale_scaled, pam, method = "silhouette")+
+  labs(title = "Silueta promedio para datos escalados")
+```
+
+\newpage
+
+5. Agrupe los datos usando *k-medoids* con el valor de *k* determinado en el punto anterior, y genere una representación gráfica de los conglomerados generados utilizando la función **fviz_cluster**. Esta función reduce la dimensionalidad de los datos a dos dimensiones utilizando el algoritmo PCA, visto en la clase 1. ¿Qué diferencias puede observar entre los clusters generados por ambos conjuntos de datos? Comente sus resultados en el foro.
+
+* *Resp: se observa una superposición de los puntos cuando estos no están escalados. Al normalizar el conjunto de datos, los conglomerados resultantes tienen muy pocos puntos de intersección, lo cual indica una mejor clusterización*
+
+```{r, fig.width=7, fig.height=3}
+set.seed(1)
+pam_original <- pam(wholesale_original,2)
+fviz_cluster(pam_original, data = wholesale_original, geom = "point")+
+  labs(title = "Cluster plot datos originales con K=2")
+
+set.seed(1)
+pam_scaled <- pam(wholesale_scaled,2)
+fviz_cluster(pam_scaled, data = wholesale_scaled, geom = "point")+
+  labs(title = "Cluster plot datos escalados con K=2")
+```
+
+\newpage
+
+6. Utilizando los conglomerados generados en el punto anterior: ¿Qué observaciones son utilizadas como representantes de cada grupo? Repita el análisis para los datos normalizados, considerando si las observaciones representantes se mantienen o cambian. Comente su análisis en el foro.
+
+* *Resp: para el conjunto de datos originales se utilizan las observaciones 56 y 90, mientras que para los datos normalizados se usan las observaciones 10 y 322. Se observa  que los mejores centros de cada conjunto son aquellos que fueron escalados (observaciones 10 y 322), ya que para cada variable estos puntos están más alejados entre sí respecto a las observaciones del conjunto de datos originales. Por otra parte al escalar los datos cambia el tamaño de los conglomerados, pasando de 313 y 127 observaciones (sin escalar), a 333 y 107 observaciones por conglomerado (con escalado).*
+
+```{r}
+# Posición de los k-medoids: Datos Originales
+pam_original$id.med
+  
+# Posición de los k-medoids: Datos Normalizados
+pam_scaled$id.med
+
+# Información de las observaciones para los datos sin escalar
+wholesale_original[c(56,90),1:6]
+
+
+# Información de las observaciones para los datos escalados
+wholesale_original[c(10,322),1:6]
+
+# Cluster info de los k-medoids: Datos Originales
+pam_original$clusinfo
+  
+# Cluster info de los k-medoids: Datos Normalizados
+pam_scaled$clusinfo
+
+```
+
+\newpage
+
+7. Cree un gráfico de silueta utilizando la función **fviz_silhouette** y discuta una interpretación para el ancho de silueta promedio total, y dentro de cada uno de los conglomerados. ¿Cómo varía la cantidad de elementos por cluster?, ¿Cómo es la calidad del agrupamiento de los datos?. Repita el análisis para los datos normalizados y comente su análisis en el foro.
+
+* *Resp: el ancho de silueta promedio total, es mayor con los datos escalados (0.41 vs 0.38), lo que indica una mejor calidad de ajuste. Por otra parte, en el análisis dentro de cada conglomerado, en el cluster con menor cantidad de observaciones se aprecian valores negativos, que pueden significar datos muy separados o también entremezclados (tanto en el conjunto original como en el escalado).*
+
+```{r, fig.width=7, fig.height=3}
+# Análisis de silueta: datos originales
+sil_original <- silhouette(pam_original)
+fviz_silhouette(sil_original)
+```
+
+\newpage
+```{r, fig.width=7, fig.height=3}
+# Análisis de silueta: datos escalados
+sil_scaled <- silhouette(pam_scaled)
+fviz_silhouette(sil_scaled)
+```
+
+* *Como conclusión del método k-medoids, la mejora alcanzada al normalizar los datos es pequeña y, según la visualización de las dos primeras componentes principales, para K=2 se obtiene un cluster que es aproximadamente 3 veces más grande que el segundo, con mayor densidad de puntos y poca dispersión de datos. Al contrario, el segundo cluster posee menor densidad de elementos y una mayor dispersión de datos, con serias sospechas de presencia de valores atípicos, dada la distancia en que se encuentran los puntos más alejados del medoide.*
+
+\newpage
+
+**\textcolor{blue}{Conglomerados Jerárquicos}**
+
+8. Responda en el foro: ¿Qué utilidad podría tener un conglomerado jerárquico en los datos disponibles?.
+
+* *Resp: una utilidad podría ser identificar a los clientes con patrones de compra muy distintos al de la gran mayoría*
+
+9. Utilizando la función `hclust()` realice un análisis de conglomerados jerárquico aglomerativo. Grafique el dendograma obtenido para cada conjunto de datos y comente sus resultados en el foro. En el siguiente enlace encontrará información sobre este tipo de gráfico: https://en.wikipedia.org/wiki/Dendrogram.
+
+* *Resp: llama la atención la diferencia de tamaño de los clusters entre los dendogramas con datos originales vs los normalizados para un mismo valor de K (en este caso igual a 2). En el dendograma con datos escalados se aprecia un grupo reducido de observaciones con pocos niveles de altura respecto al otro cluster, que agrupa a la mayoría de los datos y que contiene mayores niveles de sub-división.*
+
+```{r}
+# Conglomerado Jerárquico Aglomerativo: datos originales
+clustering_original <- hclust(dist(wholesale_original), method='ward.D2')
+fviz_dend(x = clustering_original, k = 2, cex = 0.6) +
+  geom_hline(yintercept = 270000, linetype = "dashed") +
+  labs(title = "Clustering Jerárquico Aglomerativo",
+       subtitle = "Datos originales con K=2", y="Altura", x="Datos")
+```
+
+\newpage
+
+```{r}
+# Conglomerado Jerárquico Aglomerativo: datos escalados
+clustering_scaled <- hclust(dist(wholesale_scaled), method='ward.D2')
+fviz_dend(x = clustering_scaled, k = 2, cex = 0.6) +
+  geom_hline(yintercept = 30, linetype = "dashed") +
+  labs(title = "Clustering Jerárquico Aglomerativo",
+       subtitle = "Datos escalados con K=2", y="Altura", x="Datos")
+
+
+```
+
+\newpage
+
+10. Si se quedase con la misma cantidad de grupos que en la parte 1, ¿Se parece este agrupamiento al realizado con el método de *k-medoids*? Justifique su respuesta en el foro. Para obtener la agrupación en base a un número determinado de conglomerados puede utilizar la función `cutree()`. Repita el análisis para los datos normalizados y comente en el foro.
+
+* *Resp: el agrupamiento entre k-medoids y el modelo jerárquico sí es parecido para los datos originales. Sin embargo, para el conjunto de datos normalizados es muy distinto, ya que el cluster más pequeño tiene 6 elementos en el modelo jerárquico, mientras que en k-medoids tenía 107 observaciones.*
+
+
+```{r}
+# Reducción: datos originales
+clustering_info_original <- cutree(clustering_original, k=2)
+# Informacion del cluster cortado: datos originales
+table(clustering_info_original)
+
+# Reducción: datos normalizados
+clustering_info_scaled <- cutree(clustering_scaled, k=2)
+# Informacion del cluster cortado: datos normalizados
+table(clustering_info_scaled)
+```  
+
+\newpage
+
+* *Resp: el resultado anterior, nos lleva a realizar un análisis de segundo orden, con la finalidad de poder identificar los principales estadísticos de los clusters 1 y 2.*
+
+```{r}
+wholesale_original$cluster <- as.matrix(factor(clustering_info_scaled))
+# Cluster 1
+summary(wholesale_original[wholesale_original$cluster==1,])
+
+# Cluster 2
+summary(wholesale_original[wholesale_original$cluster==2,])
+```
+
+* *Resp: podemos concluir que el cluster 2, conformado por 6 clientes, es un conglomerado con una participación sobre el total de ventas cercano al 7%. Con estos antecedentes, se podría diseñar una estrategia para la fidelización de estos clientes estableciendo, por ejemplo, un contrato de ventas a largo plazo para grandes volúmenes de productos a un precio competitivo.*
+
+```{r, echo=FALSE}
+cluster2 <- as.data.frame(round(sapply(wholesale_original
+                                       [wholesale_original$cluster==2,1:6]                                ,sum)/sapply(wholesale_original[,1:6],sum)*100,1))
+colnames(cluster2)[1] <- "Porcentaje_sobre_total_ventas"
+cluster2 <- cbind(names = rownames(cluster2), cluster2)
+colnames(cluster2)[1] <- "Category"
+cluster2 <- cluster2[order(-cluster2$Porcentaje_sobre_total_ventas),]
+rownames(cluster2) <- NULL
+cluster2
+
+```
+
+
+11. Calcule el número de observaciones para cada uno de los *k* grupos, en base al conglomerado jerárquico aglomerativo obtenido en el punto anterior, con *k* entre 2 y 10. Repita el análisis para los datos normalizados. Comente los resultados en el foro.
+
+```{r, echo=FALSE}
+# Calculando el número de observaciones por cada uno de los k grupos: Datos Originales
+counts_original <- 
+sapply(2:10,function(ncl)table(cutree(clustering_original,ncl))) 
+names(counts_original) <- 2:10
+  
+# Calculando el número de observaciones por cada uno de los k grupos: Datos Normalizados
+counts_scaled <- sapply(2:10,function(ncl)table(cutree(clustering_scaled,ncl)))
+names(counts_scaled) <- 2:10
+```
+
+```{r}  
+# Número de observaciones en cada cluster para los datos originales
+# Con valores de K entre 2 y 10
+counts_original 
+
+# Número de observaciones en cada cluster para los datos normalizados
+# Con valores de K entre 2 y 10
+counts_scaled 
+
+```
+
+\newpage
+
+* Se evidencia que en los datos normalizados, el segundo cluster en K=2 contiene 6 observaciones que corresponden a valores atípicos. Al aumentar los valores de K, este conglomerado se sub-dividió una sola vez, lo que indica lo 'raro' de este conjunto de clientes.
+
+* En resumen, el pre-procesamiento de datos es necesario para una mejor interpretación de las observaciones. 
+
+* El modelo de agrupación jerárquico aglomerativo nos permitió identificar los valores atípicos que explicaban un 7% del total de las ventas (6 datos de 440). La gran desventaja de este modelo es el costo computacional, ya que utiliza muchos recursos cuando los set de datos son muy grandes.
+
+* Con k-medoids se gana en velocidad, pero se pierde en asertividad.
+
+* Recomiendo siempre comparar los algoritmos de agrupación para trabajar con el modelo más robusto, siempre y cuando el costo computacional no sea elevado. 
+
+*Comparación de modelos:*
+```{r, echo=FALSE, message=FALSE, include=FALSE}
+intern <- clValid(wholesale_scaled, nClust = 2:6,
+clMethods = c("hierarchical","kmeans","pam",'clara'),
+              validation = "internal")
+```
+
+```{r, echo=FALSE}
+summary(intern)
+```
+
+
+```{r, fig.width=7, fig.height=9, echo=FALSE}
+par(mfrow=c(3,1))
+plot(intern)
+```
+
+\newpage
+
+En donde:
+
+* **'hierarchical'** corresponde al método de agrupación por jerarquía.
+* **'kmeans'** corresponde al método de agrupación K-means.
+* **'pam'** corresponde al método de agrupación K-medoides.
+* **'clara'** corresponde al método de agrupación que combina la idea de K-medoides con el 'resampling' (remuestreo) para que pueda aplicarse a grandes volúmenes de datos.
+* **'Connectivity', 'Dunn' y 'Silhouette'** son medidas de validación interna [2]
+
+Según lo anterior, el mejor método de agrupación para los datos analizados sería el jerárquico con k=2, ya que tiene el valor más bajo para 'Connectivity', y los valores más altos para 'Dunn' y 'Silhouette' [2].
+
+[1][Clustering, https://rpubs.com/Joaquin_AR/310338, Número óptimo de clusters]
+
+[2][Documentation 'clValid' Package, https://www.rdocumentation.org/packages/clValid/versions/0.6-9/topics/clValid, Internal measures]
